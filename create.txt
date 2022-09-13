@@ -1,0 +1,20 @@
+python -> Entra na venv
+
+//verificar versão/instalção
+
+>>> import sqlalchemy
+>>> sqlalchemy.__version___
+
+//estabelecendo conexão
+
+>>>from sqlalchemy import create_engine
+>>>engine = create_engine("sqlite+pysqlite:///:memory:", echo=True, future=True)
+
+
+
+
+
+
+
+
+
