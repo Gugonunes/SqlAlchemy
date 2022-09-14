@@ -1,0 +1,38 @@
+#Inserting Rows with Core
+>>> from sqlalchemy import insert
+>>> stmt = insert(user_table).values(name='spongebob', fullname="Spongebob Squarepants")
+
+>>> print(stmt)
+>>> compiled = stmt.compile()
+>>> compiled.params
+>>> with engine.connect() as conn:
+...     result = conn.execute(stmt)
+...     conn.commit()
+
+#INSERT usually generates the “values” clause automatically
+>>> with engine.connect() as conn:
+...     result = conn.execute(
+...         insert(user_table),
+...         [
+...             {"name": "sandy", "fullname": "Sandy Cheeks"},
+...             {"name": "patrick", "fullname": "Patrick Star"}
+...         ]
+...     )
+...     conn.commit()
+
+#INSERT…FROM SELECT
+>>> select_stmt = select(user_table.c.id, user_table.c.name + "@aol.com")
+>>> insert_stmt = insert(address_table).from_select(
+...     ["user_id", "email_address"], select_stmt
+... )
+>>> print(insert_stmt)
+
+#INSERT…RETURNING
+>>> insert_stmt = insert(address_table).returning(address_table.c.id, address_table.c.email_address)
+>>> print(insert_stmt)
+
+>>> select_stmt = select(user_table.c.id, user_table.c.name + "@aol.com")
+>>> insert_stmt = insert(address_table).from_select(
+...     ["user_id", "email_address"], select_stmt
+... )
+>>> print(insert_stmt.returning(address_table.c.id, address_table.c.email_address))
