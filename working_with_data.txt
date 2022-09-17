@@ -1,4 +1,4 @@
-#Inserting Rows with Core
+##Inserting Rows with Core
 >>> from sqlalchemy import insert
 >>> stmt = insert(user_table).values(name='spongebob', fullname="Spongebob Squarepants")
 
@@ -36,3 +36,387 @@
 ...     ["user_id", "email_address"], select_stmt
 ... )
 >>> print(insert_stmt.returning(address_table.c.id, address_table.c.email_address))
+
+
+##Selecting Rows with Core or ORM
+#The select() SQL Expression Construct
+>>> from sqlalchemy import select
+>>> stmt = select(user_table).where(user_table.c.name == 'spongebob')
+>>> print(stmt)
+
+>>> with engine.connect() as conn:
+...     for row in conn.execute(stmt):
+...         print(row)
+
+>>> stmt = select(User).where(User.name == 'spongebob')
+>>> with Session(engine) as session:
+...     for row in session.execute(stmt):
+...         print(row)
+
+#Setting the COLUMNS and FROM clause
+>>> print(select(user_table))
+>>> print(select(user_table.c.name, user_table.c.fullname))
+
+#Selecting ORM Entities and Columns
+>>> print(select(User))
+>>> row = session.execute(select(User)).first()
+>>> row
+>>> row[0]
+>>> user = session.scalars(select(User)).first()
+>>> user
+>>> print(select(User.name, User.fullname))
+>>> row = session.execute(select(User.name, User.fullname)).first()
+>>> row
+>>> session.execute(
+...     select(User.name, Address).
+...     where(User.id==Address.user_id).
+...     order_by(Address.id)
+... ).all()
+
+#Selecting from Labeled SQL Expressions
+>>> from sqlalchemy import func, cast
+>>> stmt = (
+...     select(
+...         ("Username: " + user_table.c.name).label("username"),
+...     ).order_by(user_table.c.name)
+... )
+>>> with engine.connect() as conn:
+...     for row in conn.execute(stmt):
+...         print(f"{row.username}")
+
+#Selecting with Textual Column Expressions
+>>> from sqlalchemy import text
+>>> stmt = (
+...     select(
+...         text("'some phrase'"), user_table.c.name
+...     ).order_by(user_table.c.name)
+... )
+>>> with engine.connect() as conn:
+...     print(conn.execute(stmt).all())
+
+>>> from sqlalchemy import literal_column
+>>> stmt = (
+...     select(
+...         literal_column("'some phrase'").label("p"), user_table.c.name
+...     ).order_by(user_table.c.name)
+... )
+>>> with engine.connect() as conn:
+...     for row in conn.execute(stmt):
+...         print(f"{row.p}, {row.name}")
+
+#The WHERE clause
+>>> print(user_table.c.name == 'squidward')
+user_account.name = :name_1
+
+>>> print(address_table.c.user_id > 10)
+address.user_id > :user_id_1
+
+>>> print(select(user_table).where(user_table.c.name == 'squidward'))
+
+>>> print(
+...     select(address_table.c.email_address).
+...     where(user_table.c.name == 'squidward').
+...     where(address_table.c.user_id == user_table.c.id)
+... )
+
+>>> print(
+...     select(address_table.c.email_address).
+...     where(
+...          user_table.c.name == 'squidward',
+...          address_table.c.user_id == user_table.c.id
+...     )
+... )
+
+>>> from sqlalchemy import and_, or_
+>>> print(
+...     select(Address.email_address).
+...     where(
+...         and_(
+...             or_(User.name == 'squidward', User.name == 'sandy'),
+...             Address.user_id == User.id
+...         )
+...     )
+... )
+
+>>> print(
+...     select(User).filter_by(name='spongebob', fullname='Spongebob Squarepants')
+... )
+
+#Explicit FROM clauses and JOINsExplicit FROM clauses and JOINs
+>>> print(select(user_table.c.name, address_table.c.email_address))
+
+>>> print(
+...     select(user_table.c.name, address_table.c.email_address).
+...     join_from(user_table, address_table)
+... )
+
+>>> print(
+...     select(user_table.c.name, address_table.c.email_address).
+...     join(address_table)
+... )
+
+>>> print(
+...     select(address_table.c.email_address).
+...     select_from(user_table).join(address_table)
+... )
+
+>>> from sqlalchemy import func
+>>> print (
+...     select(func.count('*')).select_from(user_table)
+... )
+
+#Setting the ON Clause
+>>> print(
+...     select(address_table.c.email_address).
+...     select_from(user_table).
+...     join(address_table, user_table.c.id == address_table.c.user_id)
+... )
+
+#OUTER and FULL join
+>>> print(
+...     select(user_table).join(address_table, isouter=True)
+... 
+>>> print(
+...     select(user_table).join(address_table, full=True)
+... )
+
+#ORDER BY, GROUP BY, HAVING
+>>> print(select(user_table).order_by(user_table.c.name))
+>>> print(select(User).order_by(User.fullname.desc()))
+
+>>> from sqlalchemy import func
+>>> count_fn = func.count(user_table.c.id)
+>>> print(count_fn)
+
+>>> with engine.connect() as conn:
+...     result = conn.execute(
+...         select(User.name, func.count(Address.id).label("count")).
+...         join(Address).
+...         group_by(User.name).
+...         having(func.count(Address.id) > 1)
+...     )
+...     print(result.all())
+
+>>> from sqlalchemy import func, desc
+>>> stmt = select(
+...         Address.user_id,
+...         func.count(Address.id).label('num_addresses')).\
+...         group_by("user_id").order_by("user_id", desc("num_addresses"))
+>>> print(stmt)
+
+#Using Aliases
+>>> user_alias_1 = user_table.alias()
+>>> user_alias_2 = user_table.alias()
+>>> print(
+...     select(user_alias_1.c.name, user_alias_2.c.name).
+...     join_from(user_alias_1, user_alias_2, user_alias_1.c.id > user_alias_2.c.id)
+... )
+#ORM Entity Aliases
+>>> from sqlalchemy.orm import aliased
+>>> address_alias_1 = aliased(Address)
+>>> address_alias_2 = aliased(Address)
+>>> print(
+...     select(User).
+...     join_from(User, address_alias_1).
+...     where(address_alias_1.email_address == 'patrick@aol.com').
+...     join_from(User, address_alias_2).
+...     where(address_alias_2.email_address == 'patrick@gmail.com')
+... )
+
+Subqueries and CTEs
+>>> subq = select(
+...     func.count(address_table.c.id).label("count"),
+...     address_table.c.user_id
+... ).group_by(address_table.c.user_id).subquery()
+>>> print(subq)
+>>> print(select(subq.c.user_id, subq.c.count))
+
+>>> stmt = select(
+...    user_table.c.name,
+...    user_table.c.fullname,
+...    subq.c.count
+... ).join_from(user_table, subq)
+
+>>> print(stmt)
+
+#Common Table Expressions (CTEs)
+
+>>> subq = select(
+...     func.count(address_table.c.id).label("count"),
+...     address_table.c.user_id
+... ).group_by(address_table.c.user_id).cte()
+
+>>> stmt = select(
+...    user_table.c.name,
+...    user_table.c.fullname,
+...    subq.c.count
+... ).join_from(user_table, subq)
+
+>>> print(stmt)
+
+#ORM Entity Subqueries/CTEs
+>>> subq = select(Address).where(~Address.email_address.like('%@aol.com')).subquery()
+>>> address_subq = aliased(Address, subq)
+>>> stmt = select(User, address_subq).join_from(User, address_subq).order_by(User.id, address_subq.id)
+>>> with Session(engine) as session:
+...     for user, address in session.execute(stmt):
+...         print(f"{user} {address}")
+
+>>> cte_obj = select(Address).where(~Address.email_address.like('%@aol.com')).cte()
+>>> address_cte = aliased(Address, cte_obj)
+>>> stmt = select(User, address_cte).join_from(User, address_cte).order_by(User.id, address_cte.id)
+>>> with Session(engine) as session:
+...     for user, address in session.execute(stmt):
+...         print(f"{user} {address}")
+
+#Scalar and Correlated Subqueries
+>>> subq = select(func.count(address_table.c.id)).\
+...             where(user_table.c.id == address_table.c.user_id).\
+...             scalar_subquery()
+>>> print(subq)
+
+>>> print(subq == 5)
+
+>>> stmt = select(user_table.c.name, subq.label("address_count"))
+>>> print(stmt)
+
+>>> subq = select(func.count(address_table.c.id)).\
+...             where(user_table.c.id == address_table.c.user_id).\
+...             scalar_subquery().correlate(user_table)
+
+>>> with engine.connect() as conn:
+...     result = conn.execute(
+...         select(
+...             user_table.c.name,
+...             address_table.c.email_address,
+...             subq.label("address_count")
+...         ).
+...         join_from(user_table, address_table).
+...         order_by(user_table.c.id, address_table.c.id)
+...     )
+...     print(result.all())
+
+#LATERAL correlation
+>>> subq = (
+...   select(
+...       func.count(address_table.c.id).label("address_count"),
+...       address_table.c.email_address,
+...       address_table.c.user_id,
+...    ).
+...    where(user_table.c.id == address_table.c.user_id).
+...    lateral()
+... )
+>>> stmt = select(
+...     user_table.c.name,
+...     subq.c.address_count,
+...     subq.c.email_address
+... ).\
+... join_from(user_table, subq).\
+... order_by(user_table.c.id, subq.c.email_address)
+>>> print(stmt)
+
+#UNION, UNION ALL and other set operations
+
+>>> from sqlalchemy import union_all
+>>> stmt1 = select(user_table).where(user_table.c.name == 'sandy')
+>>> stmt2 = select(user_table).where(user_table.c.name == 'spongebob')
+>>> u = union_all(stmt1, stmt2)
+>>> with engine.connect() as conn:
+...     result = conn.execute(u)
+...     print(result.all())
+
+>>> u_subq = u.subquery()
+>>> stmt = (
+...     select(u_subq.c.name, address_table.c.email_address).
+...     join_from(address_table, u_subq).
+...     order_by(u_subq.c.name, address_table.c.email_address)
+... )
+>>> with engine.connect() as conn:
+...     result = conn.execute(stmt)
+...     print(result.all())
+
+#Selecting ORM Entities from Unions
+>>> stmt1 = select(User).where(User.name == 'sandy')
+>>> stmt2 = select(User).where(User.name == 'spongebob')
+>>> u = union_all(stmt1, stmt2)
+
+>>> orm_stmt = select(User).from_statement(u)
+>>> with Session(engine) as session:
+...     for obj in session.execute(orm_stmt).scalars():
+...         print(obj)
+
+>>> user_alias = aliased(User, u.subquery())
+>>> orm_stmt = select(user_alias).order_by(user_alias.id)
+>>> with Session(engine) as session:
+...     for obj in session.execute(orm_stmt).scalars():
+...         print(obj)
+
+#EXISTS subqueries
+>>> subq = (
+...     select(func.count(address_table.c.id)).
+...     where(user_table.c.id == address_table.c.user_id).
+...     group_by(address_table.c.user_id).
+...     having(func.count(address_table.c.id) > 1)
+... ).exists()
+>>> with engine.connect() as conn:
+...     result = conn.execute(
+...         select(user_table.c.name).where(subq)
+...     )
+...     print(result.all())
+
+>>> subq = (
+...     select(address_table.c.id).
+...     where(user_table.c.id == address_table.c.user_id)
+... ).exists()
+>>> with engine.connect() as conn:
+...     result = conn.execute(
+...         select(user_table.c.name).where(~subq)
+...     )
+...     print(result.all())
+
+#Working with SQL Functions
+>>> print(select(func.some_crazy_function(user_table.c.name, 17)))
+SELECT some_crazy_function(user_account.name, :some_crazy_function_2) AS some_crazy_function_1
+FROM user_account
+
+>>> from sqlalchemy.dialects import postgresql
+>>> print(select(func.now()).compile(dialect=postgresql.dialect()))
+SELECT now() AS now_1
+
+>>> from sqlalchemy.dialects import oracle
+>>> print(select(func.now()).compile(dialect=oracle.dialect()))
+SELECT CURRENT_TIMESTAMP AS now_1 FROM DUAL
+
+#Functions Have Return Types
+>>> func.now().type
+DateTime()
+
+>>> from sqlalchemy import JSON
+>>> function_expr = func.json_object('{a, 1, b, "def", c, 3.5}', type_=JSON)
+
+>>> stmt = select(function_expr["def"])
+>>> print(stmt)
+
+#Built-in Functions Have Pre-Configured Return Types
+>>> m1 = func.max(Column("some_int", Integer))
+>>> m1.type
+Integer()
+
+>>> m2 = func.max(Column("some_str", String))
+>>> m2.type
+String()
+
+>>> func.now().type
+DateTime()
+>>> func.current_date().type
+Date()
+
+>>> func.concat("x", "y").type
+String()
+
+>>> func.upper("lowercase").type
+NullType()
+
+>>> print(select(func.upper("lowercase") + " suffix"))
+SELECT upper(:upper_1) || :upper_2 AS anon_1
+
