@@ -43,3 +43,57 @@ User(id=2, name='sandy', fullname='Sandy Cheeks')
 >>> sandy.fullname = "Sandy Squirrel"
 >>> sandy in session.dirty
 True
+
+>>> sandy_fullname = session.execute(
+...     select(User.fullname).where(User.id == 2)
+... ).scalar_one()
+
+>>> print(sandy_fullname)
+Sandy Squirrel
+
+>>> sandy in session.dirty
+False
+
+#ORM-enabled UPDATE statements
+>>> session.execute(
+...     update(User).
+...     where(User.name == "sandy").
+...     values(fullname="Sandy Squirrel Extraordinaire")
+... )
+>>> sandy.fullname
+'Sandy Squirrel Extraordinaire'
+
+#Deleting ORM Objects
+>>> patrick = session.get(User, 3)
+>>> session.delete(patrick)
+>>> session.execute(select(User).where(User.name == "patrick")).first()
+
+>>> patrick in session
+False
+
+#ORM-enabled DELETE Statements
+>>> squidward = session.get(User, 4)
+>>> session.execute(delete(User).where(User.name == "squidward"))
+>>> squidward in session
+False
+
+#Rolling Back
+>>> session.rollback()
+ROLLBACK
+
+>>> sandy.__dict__
+{'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0x...>}
+
+>>> sandy.fullname
+
+>>> sandy.__dict__  
+{'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0x...>,
+ 'id': 2, 'name': 'sandy', 'fullname': 'Sandy Cheeks'}
+
+ >>> patrick in session
+True
+
+>>> session.execute(select(User).where(User.name == 'patrick')).scalar_one() is patrick
+
+#Closing a Session
+>>> session.close()
